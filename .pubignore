@@ -1,0 +1,9 @@
+# Ignore example build artifacts but keep example source
+example/.dart_tool/
+example/build/
+example/ios/Pods/
+example/macos/Pods/
+example/.metadata
+
+# Avoid duplicating model assets (already in assets/)
+example/assets/
