@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:fireredvad/fireredvad.dart';
@@ -181,7 +182,7 @@ class _VadDemoPageState extends State<VadDemoPage> {
   }
 
   Future<void> _startRecording() async {
-    if (!Platform.isMacOS) {
+    if (!kIsWeb && !Platform.isMacOS) {
       final status = await Permission.microphone.request();
       if (!status.isGranted) {
         if (mounted) {
@@ -291,13 +292,15 @@ class _VadDemoPageState extends State<VadDemoPage> {
     final segment = _segments[index];
     final wav = buildWav(segment.pcm);
 
-    // Write WAV to temp file
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/vad_segment_$index.wav');
-    await file.writeAsBytes(wav);
-
     setState(() => _playingIndex = index);
-    await _player.setFilePath(file.path);
+    if (kIsWeb) {
+      await _player.setAudioSource(_WavAudioSource(wav));
+    } else {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/vad_segment_$index.wav');
+      await file.writeAsBytes(wav);
+      await _player.setFilePath(file.path);
+    }
     _player.play();
   }
 
@@ -838,4 +841,23 @@ class _SegmentBarWaveformPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SegmentBarWaveformPainter old) =>
       old.pcm != pcm;
+}
+
+/// Audio source for playing WAV bytes in memory (used on web).
+class _WavAudioSource extends StreamAudioSource {
+  final Uint8List _wav;
+  _WavAudioSource(this._wav);
+
+  @override
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    final s = start ?? 0;
+    final e = end ?? _wav.length;
+    return StreamAudioResponse(
+      sourceLength: _wav.length,
+      contentLength: e - s,
+      offset: s,
+      stream: Stream.value(_wav.sublist(s, e)),
+      contentType: 'audio/wav',
+    );
+  }
 }
